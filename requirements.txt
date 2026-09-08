@@ -1,0 +1,9 @@
+# Versiones fijadas para que el pipeline sea reproducible: las cifras del
+# reporte de calidad son identicas en cualquier maquina y en cualquier fecha.
+# Si alguna version no estuviera disponible, relajar el pin a >= y verificar
+# que la corrida siga saliendo verde antes de usarla en clase.
+scikit-learn==1.8.0
+pandas==3.0.2
+numpy==2.4.4
+joblib==1.5.3
+pytest==9.1.1

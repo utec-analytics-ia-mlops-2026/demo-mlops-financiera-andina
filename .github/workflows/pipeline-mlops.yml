@@ -1,0 +1,144 @@
+name: Pipeline MLOps · Scoring Financiera Andina
+
+# El pipeline se dispara solo. Nadie lo lanza a mano.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:        # permite lanzarlo manualmente desde la pestana Actions
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+
+  # ==========================================================================
+  # 1. PRUEBAS DE CODIGO Y DE DATOS
+  #    Se ejecutan antes de gastar un solo segundo en entrenar.
+  # ==========================================================================
+  pruebas:
+    name: 1 · Pruebas de codigo y datos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Capa 1 · Pruebas de codigo
+        run: pytest tests/test_codigo.py -v
+
+      - name: Capa 2 · Pruebas de datos
+        run: pytest tests/test_datos.py -v
+
+      - name: Validar el contrato de datos
+        run: python -m src.datos
+
+  # ==========================================================================
+  # 2. ENTRENAMIENTO
+  #    Solo corre si las pruebas pasaron.
+  # ==========================================================================
+  entrenamiento:
+    name: 2 · Entrenamiento del modelo
+    runs-on: ubuntu-latest
+    needs: pruebas
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Entrenar
+        run: python -m src.entrenar
+
+      - name: Capa 3 · Pruebas del modelo entrenado
+        run: pytest tests/test_modelo.py -v
+
+      - name: Guardar artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: modelo
+          path: artefactos/
+          retention-days: 7
+
+  # ==========================================================================
+  # 3. PUERTAS DE CALIDAD
+  #    Aqui se decide, sin intervencion humana, si el modelo puede desplegarse.
+  #    Si alguna puerta falla, este job falla y el despliegue nunca ocurre.
+  # ==========================================================================
+  puertas-de-calidad:
+    name: 3 · Puertas de calidad
+    runs-on: ubuntu-latest
+    needs: entrenamiento
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Recuperar artefactos del entrenamiento
+        uses: actions/download-artifact@v4
+        with:
+          name: modelo
+          path: artefactos/
+
+      - name: Evaluar puertas de calidad
+        run: python -m src.evaluar
+
+      - name: Guardar reporte de calidad
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-calidad
+          path: artefactos/reporte_calidad.json
+          retention-days: 30
+
+  # ==========================================================================
+  # 4. DESPLIEGUE
+  #    No se ejecuta si el job anterior fallo: GitHub lo marca como omitido.
+  #    Ese salto en gris es la demostracion.
+  # ==========================================================================
+  despliegue:
+    name: 4 · Despliegue a produccion
+    runs-on: ubuntu-latest
+    needs: puertas-de-calidad
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Recuperar el modelo aprobado
+        uses: actions/download-artifact@v4
+        with:
+          name: modelo
+          path: artefactos/
+
+      - name: Publicar el modelo
+        run: |
+          echo "El modelo supero todas las puertas de calidad."
+          echo "Estrategia: despliegue canario, 5% del trafico."
+          echo "Reversion automatica si la tasa de aprobacion sale de la banda."
+          ls -la artefactos/
+
+      - name: Registrar el despliegue
+        run: |
+          {
+            echo "## Modelo desplegado"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Autor: ${{ github.actor }}"
+            echo "- Estrategia: canario al 5%"
+          } >> "$GITHUB_STEP_SUMMARY"
