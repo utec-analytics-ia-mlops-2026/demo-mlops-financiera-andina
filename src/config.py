@@ -16,7 +16,7 @@ Todo lo demas del pipeline se ejecuta solo.
 #
 #   >>> DEMO EN CLASE: cambiar 0.50 por 0.60 y hacer push. <<<
 #
-UMBRAL_DECISION = 0.50
+UMBRAL_DECISION = 0.60
 
 # ---------------------------------------------------------------------------
 # PUERTAS DE CALIDAD
