@@ -3,9 +3,9 @@ name: Pipeline MLOps · Scoring Financiera Andina
 # El pipeline se dispara solo. Nadie lo lanza a mano.
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:        # permite lanzarlo manualmente desde la pestana Actions
 
 env:
